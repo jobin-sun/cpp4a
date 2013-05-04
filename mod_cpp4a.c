@@ -41,22 +41,148 @@
 #include "http_config.h"
 #include "http_protocol.h"
 #include "ap_config.h"
+#include "apr_pools.h"
+#include "apr_file_io.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+typedef struct {
+    int         enabled;      /* Enable or disable our module */
+    const char *conf;         /* Configurate file path */
+} cpp4a_config;
+
+static cpp4a_config config;
+
+/* Handler for the "cpp4aEnabled" directive */
+const char *cpp4a_set_enabled(cmd_parms *cmd, void *cfg, const char *arg)
+{
+    if(!strcasecmp(arg, "on")) config.enabled = 1;
+    else config.enabled = 0;
+    return NULL;
+}
+
+/* Handler for the "examplePath" directive */
+const char *cpp4a_set_conf(cmd_parms *cmd, void *cfg, const char *arg)
+{
+    config.conf = arg;
+    return NULL;
+}
+
+static const command_rec cpp4a_directives[] =
+{
+    AP_INIT_TAKE1("cpp4aEnabled", cpp4a_set_enabled, NULL, RSRC_CONF, "Enable or disable mod_example"),
+    AP_INIT_TAKE1("cpp4aConf", cpp4a_set_conf, NULL, RSRC_CONF, "The configure file"),
+    { NULL }
+};
 
 /* The sample content handler */
 static int cpp4a_handler(request_rec *r)
 {
+	ap_rprintf(r,"%d<br>",config.enabled);
+	ap_rprintf(r,"%s<br>",config.conf);
+	apr_finfo_t finfo;
+	int rc;
+	//char filename[256]={0};
     if (strcmp(r->handler, "cpp4a")) {
         return DECLINED;
     }
-    r->content_type = "text/html";      
+    r->content_type = "text/html";
+    int rfilenameLen=strlen(r->filename);
+    ap_rprintf(r,"%d<br>",rfilenameLen);
+    char* filename=(char*)malloc(rfilenameLen+1);
+    if(filename==NULL){
+    	ap_rprintf(r,"Memory allocation failure:10000001");
+    	return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    memset(filename,0,rfilenameLen+1);
+    strcpy(filename,r->filename);
+    int temp=rfilenameLen-1;
+    int suffixLen=0;
+    int flag=0;
+//    ap_rprintf(r,"%c<br>",filename[temp]);
+//    ap_rprintf(r,"%c<br>",filename[temp-1]);
+//    ap_rprintf(r,"%s<br>",filename);
+    while(temp!=0){
+    	if(filename[temp]=='/'){
+    		filename[temp]='\0';
+    		break;
+    	}
+    	if(filename[temp]!='.'&&flag==0){
+    		suffixLen++;
+    	}else{
+    		flag=1;
+    	}
+    	temp--;
+    }
+    int onlyName=rfilenameLen-(temp+1)-1-suffixLen;//temp+1 array index start from 0,-1 remove '/'
+    int targetPathLen=(temp+1)+7+onlyName;//2 + 5 ; 2 "so", 5 "/bin/"
+    char* targetfname=(char*)malloc(targetPathLen+1);
+    if(targetfname==NULL){
+        ap_rprintf(r,"Memory allocation failure:10000002");
+        return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    memset(targetfname,0,targetPathLen);
+    ap_rprintf(r,"%d<br>",suffixLen);
+    ap_rprintf(r,"%d<br>",targetPathLen);
+    char as[]="/test";
+    strcpy(targetfname,filename);
+    ap_rprintf(r,"%s<br>",filename);
+    ap_rprintf(r,"%s<br>",targetfname);
+    strcat(targetfname,"/bin");
+    apr_pool_t *apt;
+    apr_status_t apst;
+    //int rst=0;
+    //rst=mkdir("/home/jobin/Program/apache/htdocs/bin",0x755);
+    apst=apr_dir_make(targetfname,0x755,apt);
+    if(apst!=0){
+    	ap_rprintf(r,"%d<br>",apst);
+    	char buf[255]={0};
+    	apr_strerror(apst,buf,sizeof(buf));
+    	ap_rprintf(r,"%s make /bin directory %s<br>",filename,buf);
+    	//return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    apr_file_perms_set(targetfname,0x755);
+    ap_rprintf(r,"%s<br>",filename);
+    ap_rprintf(r,"%s<br>",targetfname);
+    //strcat();
+    //rc=apr_stat()
+    /*
+    ap_rprintf(r,"%s<br>",r->filename);
+    ap_rprintf(r,"%s<br>",filename);
+    ap_rprintf(r,"%s<br>",r->unparsed_uri);
+    ap_rprintf(r,"%s<br>",r->uri);
+    ap_rprintf(r,"%s<br>",r->canonical_filename);
+    ap_rprintf(r,"%s<br>",r->path_info);
+    ap_rprintf(r,"%s<br>",r->args);
+    */
 
-    //if (!r->header_only)
-        ap_rputs("The sample page from mod_cpp4a.c\n", r);
+
+    if(rc==APR_SUCCESS){
+
+    }else{
+    	return HTTP_FORBIDDEN;
+    }
+    /*
+    	   取得修改时间
+    	   */
+    	/*
+    	struct stat buf;
+    	int status;
+    	status=stat("temp.c",&buf);
+    	if(status!=-1){
+    		printf("%ld\n",(long int)buf.st_mtime);
+    	}
+    	*/
+    free(targetfname);
+    free(filename);
     return OK;
 }
 
 static void cpp4a_register_hooks(apr_pool_t *p)
 {
+	config.enabled = 1;
+	config.conf = "/Home/Program/apache/conf/cpp4a.conf";
     ap_hook_handler(cpp4a_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
@@ -67,7 +193,7 @@ module AP_MODULE_DECLARE_DATA cpp4a_module = {
     NULL,                  /* merge  per-dir    config structures */
     NULL,                  /* create per-server config structures */
     NULL,                  /* merge  per-server config structures */
-    NULL,                  /* table of config file commands       */
+    cpp4a_directives,                  /* table of config file commands       */
     cpp4a_register_hooks  /* register hooks                      */
 };
 

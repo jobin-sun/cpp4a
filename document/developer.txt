@@ -23,7 +23,7 @@ Case 3: When the original page is modify
         Do the same steps with Case 1.
 
 -------------------------------------------------------
-.cmd file
+.cmd file format
         index.ch g++
         index2.ch g++ -ldl
 

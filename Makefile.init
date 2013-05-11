@@ -1,11 +1,13 @@
 #The besiest way to complie is with apxs(the Apache extension tool), 
 #which is desiged for compliling and installing modules and adding them into Apache's configuration file
 #But using this tool does not show the detail for the process , so the below Makefile will show more
-TITLE=dummyexample
+TITLE=mod_cpp4a
 SERVERNAME=apache
 CC=gcc
 LD=ld
+#Directory of apache head file.
 INC=-I/usr/local/$(SERVERNAME)/include –DEAPI
+
 SRCINC=-I/usr/src/apache_1.3.12/src/lib/expat-lite
 LIBEXEC=/usr/local/$(SERVERNAME)/libexec
 APCTL=/usr/local/$(SERVERNAME)/bin/apachectl

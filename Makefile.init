@@ -1,0 +1,25 @@
+#The besiest way to complie is with apxs(the Apache extension tool), 
+#which is desiged for compliling and installing modules and adding them into Apache's configuration file
+#But using this tool does not show the detail for the process , so the below Makefile will show more
+TITLE=dummyexample
+SERVERNAME=apache
+CC=gcc
+LD=ld
+INC=-I/usr/local/$(SERVERNAME)/include –DEAPI
+SRCINC=-I/usr/src/apache_1.3.12/src/lib/expat-lite
+LIBEXEC=/usr/local/$(SERVERNAME)/libexec
+APCTL=/usr/local/$(SERVERNAME)/bin/apachectl
+LIBS=-lm
+all:         $(TITLE).so
+install:all
+             cp $(TITLE).so $(LIBEXEC)/$(TITLE).so
+             chmod a+x $(LIBEXEC)/$(TITLE).so
+restart:
+             -$(APCTL) graceful
+clean:
+             -rm -f $(TITLE).o $(TITLE).so
+$(TITLE).so:      $(TITLE).c
+         $(CC) -funsigned-char -DUSE_EXPAT $(SRCINC) -fpic
+         -DSHARED_MODULE \
+         $(INC) $(LIB) -c $(TITLE).c
+         $(LD) -Bshareable -o $(TITLE).so $(TITLE).o $(LIBS)

@@ -1,4 +1,5 @@
 This docuement is to describe the structrue of project , if you are a developer , plase read the following.
+#File structure
 htdocs/
     .bin/
         index.cpp (only in debug mode)
@@ -9,6 +10,7 @@ htdocs/
     index.ch
     index2.ch
 ---------------------------------------------
+#How to run
 Case 1: When the page first access , cpp4a will do(for example index.ch); 
         1.Read the page(index.ch) 
         2.Generate the c++ source file(index.cpp) in .bin directory
@@ -23,7 +25,7 @@ Case 3: When the original page is modify
         Do the same steps with Case 1.
 
 -------------------------------------------------------
-.cmd file format
+# .cmd file format
         index.ch g++
         index2.ch g++ -ldl
 

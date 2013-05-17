@@ -1,5 +1,5 @@
 This docuement is to describe the structrue of project , if you are a developer , plase read the following.
-#File structure
+#Instructions
 htdocs/
     .bin/
         index.cpp (only in debug mode)

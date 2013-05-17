@@ -11,17 +11,17 @@ htdocs/
     index2.ch
 ---------------------------------------------
 #How to run
-Case 1: When the page first access , cpp4a will do(for example index.ch); 
-        1.Read the page(index.ch) 
+Case 1: When the page first accessed , cpp4a will execute(in this example index.ch); 
+        1.Read the page "index.ch" 
         2.Generate the c++ source file(index.cpp) in .bin directory
-        3.Read the compile command in .cmd , if no found , get the default compile command
+        3.Read the compile command in .cmd , if not found , get the default compile command.
         4.Compile source file(index.cpp) , generate the shared object(index.so) , if not in debug mode remove the source file(index.cpp) 
         5.Load the shared object
 
-Case 2: When the page have be compiled 
+Case 2: When the page has been compiled 
         1.Load the shared object.
 
-Case 3: When the original page is modify
+Case 3: When the original page is modified
         Do the same steps with Case 1.
 
 -------------------------------------------------------

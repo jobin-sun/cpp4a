@@ -47,6 +47,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+
+
+char* trim(char *str);
+int strIsEmpty(char *str);
 typedef struct {
     int         enabled;      /* Enable or disable our module */
     const char *conf;         /* Configurate file path */
@@ -79,15 +84,25 @@ static const command_rec cpp4a_directives[] =
 /* The sample content handler */
 static int cpp4a_handler(request_rec *r)
 {
-	ap_rprintf(r,"%d<br>",config.enabled);
-	ap_rprintf(r,"%s<br>",config.conf);
 	apr_finfo_t finfo;
-	int rc;
+	int rc,exists;
 	//char filename[256]={0};
     if (strcmp(r->handler, "cpp4a")) {
         return DECLINED;
     }
     r->content_type = "text/html";
+    ap_rprintf(r,"%s<br>",r->filename);
+    /*
+    rc = apr_stat(&finfo, r->filename, APR_FINFO_MIN, r->pool);
+    if (rc == APR_SUCCESS) {
+            exists =((finfo.filetype != APR_NOFILE) &&  !(finfo.filetype & APR_DIR));
+            if (!exists) return HTTP_NOT_FOUND; /* Return a 404 if not found. */
+    if(access(r->filename,F_OK)==-1){
+    	return HTTP_NOT_FOUND;
+    }else if(access(r->filename,R_OK)==-1){
+    	return HTTP_FORBIDDEN;
+
+    }
     int rfilenameLen=strlen(r->filename);
     ap_rprintf(r,"%d<br>",rfilenameLen);
     char* filename=(char*)malloc(rfilenameLen+1);
@@ -100,9 +115,6 @@ static int cpp4a_handler(request_rec *r)
     int temp=rfilenameLen-1;
     int suffixLen=0;
     int flag=0;
-//    ap_rprintf(r,"%c<br>",filename[temp]);
-//    ap_rprintf(r,"%c<br>",filename[temp-1]);
-//    ap_rprintf(r,"%s<br>",filename);
     while(temp!=0){
     	if(filename[temp]=='/'){
     		filename[temp]='\0';
@@ -116,7 +128,10 @@ static int cpp4a_handler(request_rec *r)
     	temp--;
     }
     int onlyName=rfilenameLen-(temp+1)-1-suffixLen;//temp+1 array index start from 0,-1 remove '/'
-    int targetPathLen=(temp+1)+7+onlyName;//2 + 5 ; 2 "so", 5 "/bin/"
+    //char sOnlyName[onlyName+1]={0};
+    char sOnlyName[255]={0};
+    int targetPathLen=(temp+1)+8+onlyName;//2 + 6 ; 2 "so", 6 "/.bin/"
+    strcpy(sOnlyName,(r->filename)+rfilenameLen-onlyName-suffixLen-1);
     char* targetfname=(char*)malloc(targetPathLen+1);
     if(targetfname==NULL){
         ap_rprintf(r,"Memory allocation failure:10000002");
@@ -125,55 +140,68 @@ static int cpp4a_handler(request_rec *r)
     memset(targetfname,0,targetPathLen);
     ap_rprintf(r,"%d<br>",suffixLen);
     ap_rprintf(r,"%d<br>",targetPathLen);
-    char as[]="/test";
     strcpy(targetfname,filename);
     ap_rprintf(r,"%s<br>",filename);
     ap_rprintf(r,"%s<br>",targetfname);
-    strcat(targetfname,"/bin");
+    strcat(targetfname,"/.bin/");
     apr_pool_t *apt;
     apr_status_t apst;
     //int rst=0;
     //rst=mkdir("/home/jobin/Program/apache/htdocs/bin",0x755);
-    apst=apr_dir_make(targetfname,0x755,apt);
-    if(apst!=0){
-    	ap_rprintf(r,"%d<br>",apst);
-    	char buf[255]={0};
-    	apr_strerror(apst,buf,sizeof(buf));
-    	ap_rprintf(r,"%s make /bin directory %s<br>",filename,buf);
-    	//return HTTP_INTERNAL_SERVER_ERROR;
+    if(access(targetfname,F_OK)==-1){
+    	apst=apr_dir_make(targetfname,0x755,apt);
+    	if(apst!=0){
+    		/*
+			ap_rprintf(r,"%d<br>",apst);
+			char buf[255]={0};
+			apr_strerror(apst,buf,sizeof(buf));
+			ap_rprintf(r,"%s make /.bin directory %s<br>",filename,buf);
+			*/
+			return HTTP_INTERNAL_SERVER_ERROR;
+		}
+		apr_file_perms_set(targetfname,0x755);
     }
-    apr_file_perms_set(targetfname,0x755);
-    ap_rprintf(r,"%s<br>",filename);
-    ap_rprintf(r,"%s<br>",targetfname);
-    //strcat();
-    //rc=apr_stat()
-    /*
-    ap_rprintf(r,"%s<br>",r->filename);
-    ap_rprintf(r,"%s<br>",filename);
-    ap_rprintf(r,"%s<br>",r->unparsed_uri);
-    ap_rprintf(r,"%s<br>",r->uri);
-    ap_rprintf(r,"%s<br>",r->canonical_filename);
-    ap_rprintf(r,"%s<br>",r->path_info);
-    ap_rprintf(r,"%s<br>",r->args);
+    /*else{
+    	ap_rprintf(r,".bin has been exist<br>");
+    }
     */
-
-
-    if(rc==APR_SUCCESS){
-
-    }else{
-    	return HTTP_FORBIDDEN;
+    int cmdFileLen=strlen(filename)+4;//filename's length plus the .cmd length
+    char* cmdFile=(char*)malloc(cmdFileLen+1);
+    strcpy(cmdFile,filename);
+    strcat(cmdFile,"/.cmd");
+    ap_rprintf(r,"%s<br>",cmdFile);
+    if(access(cmdFile,R_OK)==0){
+    	ap_rprintf(r,"Right<br>");
     }
-    /*
-    	   取得修改时间
-    	   */
-    	/*
-    	struct stat buf;
-    	int status;
-    	status=stat("temp.c",&buf);
-    	if(status!=-1){
-    		printf("%ld\n",(long int)buf.st_mtime);
+    FILE *cmdFd=fopen(cmdFile,"r");
+    if(cmdFd==NULL){
+    	return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    //char line[512]={0};
+    char* line=(char*)malloc(512);
+    size_t line_len=sizeof(line);
+    char cmdName[256]={0};
+    char cmdValue[255]={0};
+
+    while(feof(cmdFd)==0){
+    	//fgetc(cmdFd);
+    	//ap_rprintf(r,"%c",fgetc(cmdFd));
+    	//ap_rprintf(r,"line=%s<br>",line);
+    	int rst=getline(&line,&line_len,cmdFd);
+    	//ap_rprintf(r,"rst=%d;line_len=%d;line=%s<br>",rst,line_len,line);
+
+    	if(rst>0){
+    		sscanf(line,"%[^=]=%[^\n]",cmdName,cmdValue);
+    		trim(cmdName);
+    		trim(cmdValue);
+    		if(strcmp(cmdName,sOnlyName)==0){
+    			break;
+    		}
     	}
-    	*/
+    }
+    ap_rprintf(r,"%s<br>",cmdValue);
+    free(line);
+    free(cmdFile);
     free(targetfname);
     free(filename);
     return OK;
@@ -196,4 +224,49 @@ module AP_MODULE_DECLARE_DATA cpp4a_module = {
     cpp4a_directives,                  /* table of config file commands       */
     cpp4a_register_hooks  /* register hooks                      */
 };
+/*
+ * trim function move first nonesapce character to the first position
+ * set '\0' after the last nonespace character
+ * return the origin char*
+ */
+char* trim(char *str){
+	int str_len=strlen(str);
 
+	int i=0;
+	int flag=1;
+	int spaceNum=0;
+	for(i=0;i<str_len;i++){
+		if(isspace(*(str+i))&&flag==1){
+			spaceNum++;
+		}else{
+			flag=0;
+			break;
+		}
+	}
+	if(spaceNum!=0){
+		for(i=0;i<str_len;i++){
+			*(str+i)=*(str+i+spaceNum);
+		}
+	}
+	str_len-=spaceNum;
+	flag=1;
+	spaceNum=0;
+	for(i=str_len-1;i>=0;i--){
+		if(isspace(*(str+i))&&flag==1){
+			spaceNum++;
+		}else{
+			flag=0;
+			break;
+		}
+	}
+	if(spaceNum!=0){
+		*(str+str_len-spaceNum)='\0';
+	}
+	return str;
+};
+int strIsEmpty(char *str){
+	if(str==NULL||*str=='\0'){
+		return 1;
+	}
+	return 0;
+}

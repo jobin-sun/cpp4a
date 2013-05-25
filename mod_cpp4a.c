@@ -91,12 +91,6 @@ static int cpp4a_handler(request_rec *r)
         return DECLINED;
     }
     r->content_type = "text/html";
-    ap_rprintf(r,"%s<br>",r->filename);
-    /*
-    rc = apr_stat(&finfo, r->filename, APR_FINFO_MIN, r->pool);
-    if (rc == APR_SUCCESS) {
-            exists =((finfo.filetype != APR_NOFILE) &&  !(finfo.filetype & APR_DIR));
-            if (!exists) return HTTP_NOT_FOUND; /* Return a 404 if not found. */
     if(access(r->filename,F_OK)==-1){
     	return HTTP_NOT_FOUND;
     }else if(access(r->filename,R_OK)==-1){
@@ -104,10 +98,10 @@ static int cpp4a_handler(request_rec *r)
 
     }
     int rfilenameLen=strlen(r->filename);
-    ap_rprintf(r,"%d<br>",rfilenameLen);
+    //ap_rprintf(r,"%d<br>",rfilenameLen);
     char* filename=(char*)malloc(rfilenameLen+1);
     if(filename==NULL){
-    	ap_rprintf(r,"Memory allocation failure:10000001");
+    	//ap_rprintf(r,"Memory allocation failure:10000001");
     	return HTTP_INTERNAL_SERVER_ERROR;
     }
     memset(filename,0,rfilenameLen+1);
@@ -138,38 +132,21 @@ static int cpp4a_handler(request_rec *r)
         return HTTP_INTERNAL_SERVER_ERROR;
     }
     memset(targetfname,0,targetPathLen);
-    ap_rprintf(r,"%d<br>",suffixLen);
-    ap_rprintf(r,"%d<br>",targetPathLen);
     strcpy(targetfname,filename);
-    ap_rprintf(r,"%s<br>",filename);
-    ap_rprintf(r,"%s<br>",targetfname);
     strcat(targetfname,"/.bin/");
     apr_pool_t *apt;
     apr_status_t apst;
-    //int rst=0;
-    //rst=mkdir("/home/jobin/Program/apache/htdocs/bin",0x755);
     if(access(targetfname,F_OK)==-1){
     	apst=apr_dir_make(targetfname,0x755,apt);
     	if(apst!=0){
-    		/*
-			ap_rprintf(r,"%d<br>",apst);
-			char buf[255]={0};
-			apr_strerror(apst,buf,sizeof(buf));
-			ap_rprintf(r,"%s make /.bin directory %s<br>",filename,buf);
-			*/
 			return HTTP_INTERNAL_SERVER_ERROR;
 		}
 		apr_file_perms_set(targetfname,0x755);
     }
-    /*else{
-    	ap_rprintf(r,".bin has been exist<br>");
-    }
-    */
     int cmdFileLen=strlen(filename)+4;//filename's length plus the .cmd length
     char* cmdFile=(char*)malloc(cmdFileLen+1);
     strcpy(cmdFile,filename);
     strcat(cmdFile,"/.cmd");
-    ap_rprintf(r,"%s<br>",cmdFile);
     if(access(cmdFile,R_OK)==0){
     	ap_rprintf(r,"Right<br>");
     }
@@ -182,24 +159,38 @@ static int cpp4a_handler(request_rec *r)
     size_t line_len=sizeof(line);
     char cmdName[256]={0};
     char cmdValue[255]={0};
+    int isFoundCmd=0;
 
     while(feof(cmdFd)==0){
-    	//fgetc(cmdFd);
-    	//ap_rprintf(r,"%c",fgetc(cmdFd));
-    	//ap_rprintf(r,"line=%s<br>",line);
     	int rst=getline(&line,&line_len,cmdFd);
-    	//ap_rprintf(r,"rst=%d;line_len=%d;line=%s<br>",rst,line_len,line);
-
     	if(rst>0){
     		sscanf(line,"%[^=]=%[^\n]",cmdName,cmdValue);
     		trim(cmdName);
     		trim(cmdValue);
     		if(strcmp(cmdName,sOnlyName)==0){
+    			isFoundCmd=1;
     			break;
     		}
     	}
     }
-    ap_rprintf(r,"%s<br>",cmdValue);
+    if(isFoundCmd==0){
+    	FILE* confFd=fopen(config.conf,"r");
+    	if(confFd==NULL){
+    		return HTTP_INTERNAL_SERVER_ERROR;
+    	}
+    	while(feof(cmdFd)==0){
+    	    int rst=getline(&line,&line_len,cmdFd);
+    	    if(rst>0){
+    	    	sscanf(line,"%[^=]=%[^\n]",cmdName,cmdValue);
+    	    	trim(cmdName);
+    	    	trim(cmdValue);
+    	    	if(strcmp(cmdName,sOnlyName)==0){
+    	    		isFoundCmd=1;
+    	    		break;
+    	    	}
+    	    }
+    	}
+    }
     free(line);
     free(cmdFile);
     free(targetfname);

@@ -87,6 +87,20 @@ static int cpp4a_handler(request_rec *r)
 	apr_finfo_t finfo;
 	int rc,exists;
 	//char filename[256]={0};
+
+	int suffixCh=3; //".ch" length
+	int suffixSo=3; //".so" length
+	char *nameNoSuf=NULL;
+	int nameNoSufLen=0;
+	char *basePath=NULL;
+	int basePathLen=0;
+	char *binBasePath=NULL;
+	int binBasePathLen=basePath+5 ;// .bin/
+	char *binFullPath=NULL;
+	int binFullPathLen=binBasePathLen+nameNoSufLen+suffixSo;
+	char *cmdPath=NULL;
+	int cmdPathLen=basePath+4 ;//.cmd
+
     if (strcmp(r->handler, "cpp4a")) {
         return DECLINED;
     }
@@ -97,6 +111,18 @@ static int cpp4a_handler(request_rec *r)
     	return HTTP_FORBIDDEN;
 
     }
+    nameNoSufLen=strlen(r->filename);
+    while(*(r->filename + nameNoSufLen)!='/'){
+    	nameNoSufLen--;
+    }
+    if(*(r->filename + nameNoSufLen)=='/'){
+    	nameNoSufLen++;
+    }
+    nameNoSufLen=strlen(r->filename)-nameNoSufLen-suffixCh;
+//    ap_rprintf(r,"%d<br>",nameNoSufLen);
+
+
+
     int rfilenameLen=strlen(r->filename);
     //ap_rprintf(r,"%d<br>",rfilenameLen);
     char* filename=(char*)malloc(rfilenameLen+1);
@@ -122,10 +148,11 @@ static int cpp4a_handler(request_rec *r)
     	temp--;
     }
     int onlyName=rfilenameLen-(temp+1)-1-suffixLen;//temp+1 array index start from 0,-1 remove '/'
+    // /home/Program/apache/htdoc/index
     //char sOnlyName[onlyName+1]={0};
     char sOnlyName[255]={0};
-    int targetPathLen=(temp+1)+8+onlyName;//2 + 6 ; 2 "so", 6 "/.bin/"
-    strcpy(sOnlyName,(r->filename)+rfilenameLen-onlyName-suffixLen-1);
+    int targetPathLen=(temp+1)+8+onlyName;//2 + 6 ; 2 "so", 6 "/.bin/" /home/Program/apache/htdoc/.bin
+    strcpy(sOnlyName,(r->filename)+rfilenameLen-onlyName-suffixLen-1);//index
     char* targetfname=(char*)malloc(targetPathLen+1);
     if(targetfname==NULL){
         ap_rprintf(r,"Memory allocation failure:10000002");
@@ -147,9 +174,11 @@ static int cpp4a_handler(request_rec *r)
     char* cmdFile=(char*)malloc(cmdFileLen+1);
     strcpy(cmdFile,filename);
     strcat(cmdFile,"/.cmd");
+    /*
     if(access(cmdFile,R_OK)==0){
     	ap_rprintf(r,"Right<br>");
     }
+    */
     FILE *cmdFd=fopen(cmdFile,"r");
     if(cmdFd==NULL){
     	return HTTP_INTERNAL_SERVER_ERROR;
@@ -190,7 +219,9 @@ static int cpp4a_handler(request_rec *r)
     	    	}
     	    }
     	}
+    	fclose(confFd);
     }
+    fclose(cmdFd);
     free(line);
     free(cmdFile);
     free(targetfname);

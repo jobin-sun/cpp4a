@@ -1,0 +1,3 @@
+10000001    Memory allocation failure
+10000002    Operation not permitted , %s cannot be create
+10000003    %s cannot be access

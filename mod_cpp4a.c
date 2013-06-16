@@ -49,9 +49,20 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <dlfcn.h>
+
+
+//global compile command name in config file
+#define CPP4A_CC "CC"
+#define CPP4A_DEGUG
+
 
 char* trim(char *str);
 int strIsEmpty(char *str);
+int readConf(char *cmdName,char *cmdValue,char *cmdLine,int *cmdLineLen,int *isFoundCmd,request_rec *r);
 typedef struct {
     int         enabled;      /* Enable or disable our module */
     const char *conf;         /* Configurate file path */
@@ -84,151 +95,274 @@ static const command_rec cpp4a_directives[] =
 /* The sample content handler */
 static int cpp4a_handler(request_rec *r)
 {
-	apr_finfo_t finfo;
-	int rc,exists;
-	//char filename[256]={0};
-
-	int suffixCh=3; //".ch" length
-	int suffixSo=3; //".so" length
-	char *nameNoSuf=NULL;
-	int nameNoSufLen=0;
-	char *basePath=NULL;
-	int basePathLen=0;
-	char *binBasePath=NULL;
-	int binBasePathLen=basePath+5 ;// .bin/
-	char *binFullPath=NULL;
-	int binFullPathLen=binBasePathLen+nameNoSufLen+suffixSo;
-	char *cmdPath=NULL;
-	int cmdPathLen=basePath+4 ;//.cmd
-
     if (strcmp(r->handler, "cpp4a")) {
         return DECLINED;
     }
     r->content_type = "text/html";
     if(access(r->filename,F_OK)==-1){
-    	return HTTP_NOT_FOUND;
+			return HTTP_NOT_FOUND;
     }else if(access(r->filename,R_OK)==-1){
-    	return HTTP_FORBIDDEN;
+			return HTTP_FORBIDDEN;
+    }
+    
+    	apr_finfo_t finfo;
+	int rc,exists;
+	//char filename[256]={0};
+	char dirBin[]=".bin/";
+	int dirBinLen=strlen(dirBin);
+	
+	char fileCmd[]=".cmd";
+	int fileCmdLen=strlen(fileCmd);
+	
+	char suffixCh[]=".ch";
+	int suffixChLen=strlen(suffixCh); //".ch" length
+	
+	char suffixSo[]=".so";
+	int suffixSoLen=strlen(suffixSo); //".so" length
+	
+	char *nameNoSuf=NULL; // eg: "index"
+	int nameNoSufLen=0; // the length of "index"(5)
+	
+	char *basePath=NULL; //eg: "/home/tarena/program/apache/htdocs/"
+	int basePathLen=0; // the length of basePath
+	
+	char *binBasePath=NULL; //eg: "/home/tarena/program/apache/htdocs/.bin/"
+	int binBasePathLen=basePathLen+dirBinLen ;// .bin/
+	
+	char *binFullPath=NULL; //eg: "/home/tarena/program/apache/htdocs/.bin/index.so"
+	int binFullPathLen=binBasePathLen+nameNoSufLen+suffixSoLen; 
+	
+	char *cmdPath=NULL; //eg: "/home/tarena/program/apache/htdocs/.cmd"
+	int cmdPathLen=basePathLen+fileCmdLen ;//.cmd
 
-    }
-    nameNoSufLen=strlen(r->filename);
-    while(*(r->filename + nameNoSufLen)!='/'){
-    	nameNoSufLen--;
-    }
-    if(*(r->filename + nameNoSufLen)=='/'){
-    	nameNoSufLen++;
-    }
-    nameNoSufLen=strlen(r->filename)-nameNoSufLen-suffixCh;
-//    ap_rprintf(r,"%d<br>",nameNoSufLen);
+    nameNoSufLen=strlen(r->filename)-((int)(rindex(r->filename,'/')-r->filename)+1)-suffixChLen;
+    basePathLen=strlen(r->filename)-nameNoSufLen-suffixChLen;
+    binBasePathLen=basePathLen+5 ;
+    binFullPathLen=binBasePathLen+nameNoSufLen+suffixSoLen;
+    cmdPathLen=basePathLen+4 ;
+	
+    nameNoSuf=(char*)calloc(nameNoSufLen+1,1);
+	if(nameNoSuf==NULL){
+#ifdef CPP4A_DEGUG
+		ap_rprintf(r,"Memory allocation failure:10000001");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+    basePath=(char*)calloc(basePathLen+1,1);
+	if(basePath==NULL){
+#ifdef CPP4A_DEGUG
+		ap_rprintf(r,"Memory allocation failure:10000001");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+    binBasePath=(char*)calloc(binBasePathLen+1,1);
+	if(binBasePath==NULL){
+#ifdef CPP4A_DEGUG
+		ap_rprintf(r,"Memory allocation failure:10000001");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+    binFullPath=(char*)calloc(binFullPathLen+1,1);
+	
+	if(binFullPath==NULL){
+#ifdef CPP4A_DEGUG
+		ap_rprintf(r,"Memory allocation failure:10000001");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+    cmdPath=(char*)calloc(cmdPathLen+1,1);
+	if(cmdPath==NULL){
+#ifdef CPP4A_DEGUG
+		ap_rprintf(r,"Memory allocation failure:10000001");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+	
+    strncpy(nameNoSuf,r->filename+basePathLen,nameNoSufLen);
+	strncpy(basePath,r->filename,basePathLen);
 
+	
+	strncpy(binBasePath,basePath,basePathLen);
+	strcat(binBasePath,dirBin);
 
-
-    int rfilenameLen=strlen(r->filename);
-    //ap_rprintf(r,"%d<br>",rfilenameLen);
-    char* filename=(char*)malloc(rfilenameLen+1);
-    if(filename==NULL){
-    	//ap_rprintf(r,"Memory allocation failure:10000001");
-    	return HTTP_INTERNAL_SERVER_ERROR;
-    }
-    memset(filename,0,rfilenameLen+1);
-    strcpy(filename,r->filename);
-    int temp=rfilenameLen-1;
-    int suffixLen=0;
-    int flag=0;
-    while(temp!=0){
-    	if(filename[temp]=='/'){
-    		filename[temp]='\0';
-    		break;
-    	}
-    	if(filename[temp]!='.'&&flag==0){
-    		suffixLen++;
-    	}else{
-    		flag=1;
-    	}
-    	temp--;
-    }
-    int onlyName=rfilenameLen-(temp+1)-1-suffixLen;//temp+1 array index start from 0,-1 remove '/'
-    // /home/Program/apache/htdoc/index
-    //char sOnlyName[onlyName+1]={0};
-    char sOnlyName[255]={0};
-    int targetPathLen=(temp+1)+8+onlyName;//2 + 6 ; 2 "so", 6 "/.bin/" /home/Program/apache/htdoc/.bin
-    strcpy(sOnlyName,(r->filename)+rfilenameLen-onlyName-suffixLen-1);//index
-    char* targetfname=(char*)malloc(targetPathLen+1);
-    if(targetfname==NULL){
-        ap_rprintf(r,"Memory allocation failure:10000002");
-        return HTTP_INTERNAL_SERVER_ERROR;
-    }
-    memset(targetfname,0,targetPathLen);
-    strcpy(targetfname,filename);
-    strcat(targetfname,"/.bin/");
+	strncpy(binFullPath,binBasePath,binBasePathLen);
+	strcat(binFullPath,nameNoSuf);
+	strcat(binFullPath,suffixSo);
+	
+	strncpy(cmdPath,basePath,basePathLen);
+	strcat(cmdPath,fileCmd);
+	
     apr_pool_t *apt;
     apr_status_t apst;
-    if(access(targetfname,F_OK)==-1){
-    	apst=apr_dir_make(targetfname,0x755,apt);
-    	if(apst!=0){
+    if(access(binBasePath,F_OK)!=0){
+		apst=apr_dir_make(binBasePath,0x755,apt);
+		if(apst!=0){
+#ifdef CPP4A_DEGUG
+			ap_rprintf(r,"Operation not permitted , %s cannot be create:error code 10000002<br>",binBasePath);
+			return OK;
+#else	
+			return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+		}
+		apr_file_perms_set(binBasePath,0x755);
+    }
+    //if source file is earier , load the share object file 
+	if(access(binFullPath,F_OK)==0){
+		struct stat sBuf;
+		int sRst=0;
+		struct stat dBuf;
+		int dRst=0;
+		sRst=stat(r->filename,&sBuf);
+		if(sRst==0){
+			dRst=stat(binFullPath,&dBuf);
+			if(sBuf.st_mtime<dBuf.st_mtime){
+				int rst=loadSharedOb(binFullPath,r);
+				if(rst==OK){
+					return OK;
+				}else if(rst==HTTP_INTERNAL_SERVER_ERROR){
+					return HTTP_INTERNAL_SERVER_ERROR;
+				}
+			}
+		}	
+	}
+    //char cmdLine[512]={0};
+    char* cmdLine=(char*)malloc(512);
+    int cmdLineLen=sizeof(cmdLine);
+    char cmdName[256]={0};
+    char cmdValue[256]={0};
+    int isFoundCmd=0;
+    if(access(cmdPath,R_OK)!=0){
+		int rst=readConf(cmdName,cmdValue,cmdLine,&cmdLineLen,&isFoundCmd,r);
+    }else{
+		FILE *cmdFd=fopen(cmdPath,"r");
+		if(cmdFd==NULL){
+#ifdef CPP4A_DEGUG
+			ap_rprintf(r,"Open %s failure<br>",cmdPath);
+			return OK;
+#else
+			return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+		}
+		while(feof(cmdFd)==0){
+			int rst=getline(&cmdLine,&cmdLineLen,cmdFd);
+			if(rst>0){
+				sscanf(cmdLine,"%[^=]=%[^\n]",cmdName,cmdValue);
+				trim(cmdName);
+				trim(cmdValue);
+				if(strcmp(cmdName,nameNoSuf)==0){
+					isFoundCmd=1;
+					break;
+				}
+			}
+		}
+		fclose(cmdFd);
+		if(isFoundCmd==0){
+			readConf(cmdName,cmdValue,cmdLine,&cmdLineLen,&isFoundCmd,r);
+		}
+	}
+	if(isFoundCmd==0){
+#ifdef CPP4A_CC
+		ap_rprintf(r,"compile command cannot be find : error code 10000005");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+	
+	strcat(cmdValue," -fpic -shared -o ");
+	strcat(cmdValue,binFullPath);
+	strcat(cmdValue," ");
+	strcat(cmdValue,r->filename);
+    int cRst=system(cmdValue);
+	if(cRst==0){
+		int rst=loadSharedOb(binFullPath,r);
+		if(rst==OK){
+			return OK;
+		}else if(rst==HTTP_INTERNAL_SERVER_ERROR){
 			return HTTP_INTERNAL_SERVER_ERROR;
 		}
-		apr_file_perms_set(targetfname,0x755);
-    }
-    int cmdFileLen=strlen(filename)+4;//filename's length plus the .cmd length
-    char* cmdFile=(char*)malloc(cmdFileLen+1);
-    strcpy(cmdFile,filename);
-    strcat(cmdFile,"/.cmd");
-    /*
-    if(access(cmdFile,R_OK)==0){
-    	ap_rprintf(r,"Right<br>");
-    }
-    */
-    FILE *cmdFd=fopen(cmdFile,"r");
-    if(cmdFd==NULL){
-    	return HTTP_INTERNAL_SERVER_ERROR;
-    }
-    //char line[512]={0};
-    char* line=(char*)malloc(512);
-    size_t line_len=sizeof(line);
-    char cmdName[256]={0};
-    char cmdValue[255]={0};
-    int isFoundCmd=0;
-
-    while(feof(cmdFd)==0){
-    	int rst=getline(&line,&line_len,cmdFd);
-    	if(rst>0){
-    		sscanf(line,"%[^=]=%[^\n]",cmdName,cmdValue);
-    		trim(cmdName);
-    		trim(cmdValue);
-    		if(strcmp(cmdName,sOnlyName)==0){
-    			isFoundCmd=1;
-    			break;
-    		}
-    	}
-    }
-    if(isFoundCmd==0){
-    	FILE* confFd=fopen(config.conf,"r");
-    	if(confFd==NULL){
-    		return HTTP_INTERNAL_SERVER_ERROR;
-    	}
-    	while(feof(cmdFd)==0){
-    	    int rst=getline(&line,&line_len,cmdFd);
-    	    if(rst>0){
-    	    	sscanf(line,"%[^=]=%[^\n]",cmdName,cmdValue);
-    	    	trim(cmdName);
-    	    	trim(cmdValue);
-    	    	if(strcmp(cmdName,sOnlyName)==0){
-    	    		isFoundCmd=1;
-    	    		break;
-    	    	}
-    	    }
-    	}
-    	fclose(confFd);
-    }
-    fclose(cmdFd);
-    free(line);
-    free(cmdFile);
-    free(targetfname);
-    free(filename);
+	}else{
+#ifdef CPP4A_CC
+		ap_rprintf(r,"compile error : error code 10000008<br>");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+	free(cmdLine);
+	free(nameNoSuf);
+	nameNoSuf=NULL;
+	free(basePath);
+	basePath=NULL;
+	free(binBasePath);
+	binBasePath=NULL;
+	free(binFullPath);
+	binFullPath=NULL;
+	free(cmdPath);
+	cmdPath=NULL;
     return OK;
 }
-
+int loadSharedOb(char *binFullPath,request_rec *r){
+	void *handle;
+	//char (*run)(request_rec *r);
+	char* (*run)();
+	handle=dlopen(binFullPath,RTLD_LAZY);
+	if(handle==NULL){
+#ifdef CPP4A_CC
+		ap_rprintf(r,"load shared library %s failure: error 10000006",binFullPath);
+		return OK;
+#else
+	return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+	*(void **) (&run) = dlsym(handle, "run");
+	if(run==NULL){
+#ifdef CPP4A_CC
+		ap_rprintf(r,"No run function : error code 10000007<br>");
+		return OK;
+#else
+		return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+	}
+	//char *rst=(*run)(r);
+	char *rst=(*run)();
+	ap_rprintf(r,"%s",rst);
+	dlclose(handle);
+	return OK;
+}
+int readConf(char *cmdName,char *cmdValue,char *cmdLine,int * cmdLineLen,int *isFoundCmd,request_rec *r){
+	FILE* confFd=fopen(config.conf,"r");
+	if(confFd==NULL){
+#ifdef CPP4A_DEGUG
+		ap_rprintf(r,"Open config file %s failure: 10000004<br>",config.conf);
+#endif
+		return -1;
+	}
+	while(feof(confFd)==0){
+		int rst=getline(&cmdLine,&cmdLineLen,confFd);
+		if(rst>0){
+			sscanf(cmdLine,"%[^=]=%[^\n]",cmdName,cmdValue);
+			trim(cmdName);
+			trim(cmdValue);
+			if(strcmp(cmdName,CPP4A_CC)==0){
+				*isFoundCmd=1;
+				break;
+			}
+		}
+	}
+	fclose(confFd);
+	return OK;
+}
 static void cpp4a_register_hooks(apr_pool_t *p)
 {
 	config.enabled = 1;

@@ -1,6 +1,6 @@
 cpp4a(c plus plus for apache)
 =====
-cpp4a是一个apache模块，我们的上标是让c/c++开发web应用更简单，并且保持高兴能。
+cpp4a是一个apache模块，我们的目标是让c/c++开发web应用更简单，并且保持高性能。
 
 如果你是个开发者，请阅读开发文档 document/developer.txt
 
